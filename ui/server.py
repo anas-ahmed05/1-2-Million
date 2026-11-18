@@ -62,7 +62,7 @@ def serve(process, port=None):
     httpd = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     url = f"http://127.0.0.1:{port}/"
     from engine.llm import key_hint
-    print(f"MindMesh is running at {url}  (Ctrl+C to stop). The trace prints here.")
+    print(f"Web interface running at {url}  (Ctrl+C to stop). The trace prints here.")
     print(f"Using model {os.getenv('LLM_MODEL')} with API key ending {key_hint()} (from .env)")
     if os.getenv("OPEN_BROWSER", "1") != "0":
         webbrowser.open(url)
