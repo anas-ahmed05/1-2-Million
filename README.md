@@ -1,6 +1,7 @@
-# Hackathon Planner
+# MindMesh
+*Intelligence that connects the dots.*
 
-Reads a pack of messages (English / Roman Urdu) and plans a 4-hour hackathon:
+MindMesh reads a pack of messages (English / Roman Urdu) and plans a 4-hour hackathon:
 **venue, schedule, food, judging, budget**. New messages update the plan; wrong ones are rejected with a reason.
 
 ## Run it
@@ -39,7 +40,7 @@ new message ───► [1 model call: READ + accept/reject + exact field chang
 | Wrong-message guard | `plan.py` `update_run` | Two layers: (1) model judges authority/consistency; (2) code applies the change on a copy and rejects it if any passing check would fail. Plan stays valid, reason in trace. | A plausible-but-wrong message gets applied. |
 | Trace | `engine/trace.py` | Every model call numbered: model, area tag, input, output, tokens **as reported by the API**; code decisions; rejections; totals. | No proof of what happened; disqualification. |
 | State | `engine/state.py` | Saves facts + plan + trace to `output/state.json` so updates change the existing plan. | Each message would need a full re-run. |
-| UI | `ui/report.py` | HTML report + terminal text. | — |
+| UI | `ui/web.py`, `ui/server.py`, `ui/report.py` | MindMesh interface (Plan / Messages / Trace), local server for pasting messages, terminal + text-file output. Presentation only: it never computes plan figures. | — |
 
 ### Key decisions
 - **1 model call per run** (area `reading`), both full run and update. Arithmetic in code → fewest tokens, exact numbers.
