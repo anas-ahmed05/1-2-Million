@@ -1,0 +1,8 @@
+.env
+api.txt
+*.key
+.venv/
+__pycache__/
+*.pyc
+output/*
+!output/.gitkeep
