@@ -26,7 +26,7 @@ POLICY = {
 
 # ---------------------------------------------------------------- helpers
 def num(x, default=0):
-    """Turn model output like 650000, "Rs 650,000", "1.5 lakh", "50k" into an int."""
+    """Turn model output like 12345, "Rs 12,345", "2.5 lakh", "40k" into an int."""
     if x is None or x == "" or isinstance(x, bool):
         return default
     if isinstance(x, (int, float)):
@@ -332,7 +332,11 @@ def build_plan(f):
     others_onsite = sum(num(o.get("count")) for o in others)
     others_eat = sum(num(o.get("count")) for o in others if o.get("eats", True) is not False)
 
-    duration = num(ev.get("duration_minutes")) or num(ev.get("duration_hours")) * 60
+    try:
+        hours = float(str(ev.get("duration_hours") or 0).split()[0])
+    except ValueError:
+        hours = num(ev.get("duration_hours"))
+    duration = num(ev.get("duration_minutes")) or int(round(hours * 60))
     start = to_min(ev.get("start_time"))
     end = to_min(ev.get("end_time"))
     if start is None and end is not None and duration:

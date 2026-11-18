@@ -46,10 +46,40 @@ def explain_plan(trace, plan):
                          f"Spend {solver.rs(plan['budget']['spent'])} of {solver.rs(plan['budget']['total'])}.")
 
 
+def repair_missing(facts, text, trace, llm, time_budget):
+    """Safety net: if a key figure was not read, ask the model for just those fields (1 small call)."""
+    ev, bu = facts["event"], facts["budget"]
+    want = {}
+    if not solver.num(ev.get("students")):
+        want["students"] = ("event", "students")
+    if not solver.num(ev.get("team_size")) and not solver.num(ev.get("teams")):
+        want["team_size"] = ("event", "team_size")
+    if not (ev.get("duration_minutes") or ev.get("duration_hours") or (ev.get("start_time") and ev.get("end_time"))):
+        want.update({"duration_hours": ("event", "duration_hours"),
+                     "duration_minutes": ("event", "duration_minutes"),
+                     "start_time": ("event", "start_time"), "end_time": ("event", "end_time")})
+    if not solver.num(bu.get("total")):
+        want["budget_total"] = ("budget", "total")
+    if not want or time_budget < 15:
+        return
+    trace.note("reading", f"Key facts missing after reading ({', '.join(want)}); one small repair call for just those.")
+    out = llm.call_json("reading", prompts.REPAIR_SYSTEM,
+                        "KEYS: " + json.dumps({k: None for k in want}) + "\n\nMESSAGES:\n" + text,
+                        max_tokens=1500, time_budget=time_budget)
+    got = []
+    for k, (sec, field) in want.items():
+        if out.get(k) not in (None, "", 0):
+            facts[sec][field] = out[k]
+            got.append(f"{sec}.{field} = {out[k]}")
+    trace.note("reading", "Repaired: " + ("; ".join(got) or "nothing found"))
+
+
 def full_run(S, text, src, trace, llm):
+    t_start = time.time()
     trace.note("reading", f"Read {len(text)} characters from '{src}' exactly as given; sent raw to the model.")
     data = llm.call_json("reading", prompts.READ_SYSTEM, "MESSAGES:\n" + text, schema=prompts.READ_SCHEMA)
     facts = solver.clean({k: data.get(k) for k in solver.SECTIONS})
+    repair_missing(facts, text, trace, llm, time_budget=110 - (time.time() - t_start))
     msgs = _dicts(data.get("messages"))
     for m in msgs:
         st = str(m.get("status", "")).lower()
@@ -69,7 +99,7 @@ def update_run(S, text, src, trace, llm):
                           "Existing plan kept; only this message is sent with the current facts.")
     user = ("CURRENT FACTS:\n" + json.dumps(S["facts"], separators=(",", ":"), ensure_ascii=False)
             + "\n\nPLAN NOW:\n" + solver.summary(S["plan"]) + "\n\nNEW MESSAGE(S):\n" + text)
-    out = llm.call_json("reading", prompts.UPDATE_SYSTEM, user, schema=prompts.UPDATE_SCHEMA)
+    out = llm.call_json("reading", prompts.UPDATE_SYSTEM, user, schema=prompts.UPDATE_SCHEMA, time_budget=55)
     decisions = _dicts(out.get("decisions")) or [out]
     changes = _dicts(out.get("changes"))
     accepted = [d for d in decisions if str(d.get("decision", "")).lower() == "accept"]

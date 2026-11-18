@@ -44,7 +44,10 @@ class LLM:
             raise LLMError("No API key. Put LLM_API_KEY=... in the .env file (see .env.example).")
         self.client = OpenAI(api_key=key, base_url=base, timeout=45, max_retries=1)
 
-    def call_json(self, area, system, user, schema=None, max_tokens=3500, attempts=3):
+    def call_json(self, area, system, user, schema=None, max_tokens=3500, attempts=3, time_budget=110):
+        """time_budget: hard limit in seconds for this call incl. retries
+        (brief: full run <= 2 min, update <= 1 min)."""
+        start = time.time()
         extra = {}
         effort = os.getenv("LLM_REASONING_EFFORT", "medium")  # gpt-oss: low = fewer tokens, medium = more reliable
         if effort:
@@ -62,8 +65,11 @@ class LLM:
         model = self.model
         for attempt in range(1, attempts + 1):
             t0 = time.time()
+            remaining = time_budget - (t0 - start)
+            if remaining < 5:
+                raise LLMError(f"Time limit of {time_budget}s reached before the model answered; plan unchanged.")
             try:
-                r = self.client.chat.completions.create(
+                r = self.client.with_options(timeout=remaining).chat.completions.create(
                     model=model, temperature=0, max_tokens=max_tokens,
                     response_format=fmt, extra_body=extra or None,
                     messages=[{"role": "system", "content": system},
@@ -84,6 +90,8 @@ class LLM:
                 if not last and "429" in msg:  # per-minute rate limit: wait as told (max 20s), retry
                     m = re.search(r"try again in ([\d.]+)(ms|s)\b", msg)
                     wait = min(20.0, (float(m.group(1)) / (1000 if m.group(2) == "ms" else 1)) + 0.5) if m else 5.0
+                    if wait > time_budget - (time.time() - start) - 10:
+                        raise LLMError(f"Rate limited and no time left within {time_budget}s; plan unchanged.") from e
                     self.trace.note(area, f"Rate limited by provider; waiting {wait:.1f}s and retrying.")
                     time.sleep(wait)
                     continue

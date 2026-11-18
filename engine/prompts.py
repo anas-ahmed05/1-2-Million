@@ -37,7 +37,8 @@ def example(schema):
 
 
 SECTION_SCHEMAS = {
-    "event": obj({"students": N, "team_size": N, "teams": N, "duration_minutes": N, "start_time": SN,
+    "event": obj({"students": N, "team_size": N, "teams": N, "duration_hours": {"type": ["number", "null"]},
+                  "duration_minutes": N, "start_time": SN,
                   "end_time": SN, "staff": N,
                   "other_attendees": arr(obj({"who": S, "count": N, "eats": B}))}),
     "budget": obj({"total": N, "reserve": N}),
@@ -76,7 +77,8 @@ Rules:
 - First judge each message: "used", "superseded" (a newer message on the same topic replaces it), "irrelevant" (no planning impact), or "rejected" (contradicts an approved rule or newer/more authoritative facts, or sender lacks authority). note = short reason.
 - {AUTHORITY}
 - Fill every fact ONLY from "used" messages. Numbers from rejected or superseded messages must not appear.
-- Numbers are plain integers (rupees, minutes; 1.5 lakh = 150000). Unknown = null. Never invent facts.
+- Numbers are plain integers (rupees; 1.5 lakh = 150000). Unknown = null. Never invent facts.
+- Event length: copy it as written: "N-hour" -> duration_hours = N; "N minutes" -> duration_minutes = N.
 - Copy every price exactly as written: per-head, per-judge and per-item prices stay UNIT prices. Never multiply or add numbers; code does all arithmetic.
 - costs: already spent/ordered from the event budget = committed; other mandatory spend = required; requests/wishes = optional. Venue, food and judge fees are NOT costs. basis per_student = per participant; per_person = everyone on site. For per_* basis, amount = the unit price exactly as written (never multiplied).
 - excluded_reason: set when a venue or food option is unavailable or breaks a stated requirement (accessibility, power backup, dietary, location, date...); else null.
@@ -85,6 +87,8 @@ Rules:
 - other_attendees: people on site besides students, staff and judges (volunteers, guests...).
 - venue_rules: short features every venue must have (e.g. "projector", "step-free", "generator"); list venue features with the same words.
 - schedule_blocks: only extra blocks the messages require (prayer, breaks, ceremonies, talks), never the hackathon/build time or judging; "at" = fixed clock time "13:15" if stated. Judging time limits go in judging.earliest_start/latest_end."""
+
+REPAIR_SYSTEM = """From the messages, read ONLY the requested event facts, copied as written (no arithmetic). Ignore superseded or unauthorised messages. Output ONLY a JSON object with exactly the requested keys; unknown = null."""
 
 UPDATE_SYSTEM = f"""You maintain the facts of a student hackathon plan. Input: CURRENT FACTS (JSON), PLAN NOW (summary) and NEW MESSAGE(S). For each new message decide:
 - accept: a credible change from someone with authority over that fact.
@@ -96,5 +100,5 @@ UPDATE_SYSTEM = f"""You maintain the facts of a student hackathon plan. Input: C
 - match: for lists, the name/item/diet of the entry to change (null for single objects).
 - field: the field to set (e.g. "students", "amount", "fixed_fee", "excluded_reason"), or "_add" (value = full new entry) or "_remove".
 - value: the new value exactly as the message states it (unit prices, never multiplied).
-Example: printing now costs 15000 -> {{"section":"costs","match":"printing","field":"amount","value":15000}}.
+Example shape: {{"section":"costs","match":"<item name>","field":"amount","value":<new amount>}}.
 Never do arithmetic for the plan; code recomputes everything."""
